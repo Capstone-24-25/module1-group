@@ -78,3 +78,16 @@ s2 <- rf_out$importance %>%
   mutate(protein = rownames(rf_out$importance)) %>%
   slice_max(MeanDecreaseGini, n = 15) %>%
   pull(protein)
+
+## correlation method
+corr_data <- train_bio %>% 
+  filter(!is.na(ados))
+
+corr_data %>%
+  pivot_longer(cols = -c(ados, group),
+               names_to = 'protein',
+               values_to = 'level') %>%
+  group_by(protein) %>%
+  summarize(correlation = cor(as.numeric(ados), level)) %>%
+  arrange(desc(correlation)) %>%
+  slice_head(n = 15)  # Select top 10 proteins
