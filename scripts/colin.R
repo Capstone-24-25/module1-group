@@ -71,13 +71,9 @@ x_train <- training(partitions) %>%
 y_train <- training(partitions) %>%
   pull(class)
 
-plot(cv.glmnet(x_train, y_train, family = 'binomial', nfolds = 5, type.measure = 'deviance'))
-
-lambda = exp(-1.8)
-
 lambda_test <- cv.glmnet(x_train, y_train, family = 'binomial', nfolds=5)
 lambda_min <- lambda_test$lambda.1se
-lambda_min = exp(-3.5)
+lambda_min = exp(-1.75)
 final_fit <- glmnet(x_train, y_train, family = 'binomial', lambda = lambda_min)
 final_fit_df = tidy(final_fit)
 
@@ -85,7 +81,6 @@ final_fit_df = tidy(final_fit)
 proteins_panel = final_fit_df %>%
   filter(term != "(Intercept)") %>% 
   pull(term)
-
 biomarker_panel <- biomarker_clean %>%
   select(group, any_of(proteins_panel)) %>%
   mutate(class = (group == 'ASD')) %>%
