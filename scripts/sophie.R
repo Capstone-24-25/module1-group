@@ -83,7 +83,7 @@ s2 <- rf_out$importance %>%
 corr_data <- train_bio %>% 
   filter(!is.na(ados))
 
-corr_data %>%
+s3 <- corr_data %>%
   pivot_longer(cols = -c(ados, group),
                names_to = 'protein',
                values_to = 'level') %>%
