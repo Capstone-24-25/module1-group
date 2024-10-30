@@ -54,3 +54,58 @@ ggplot(biomarker_long, aes(x = value)) +
   theme_minimal()
 
 # The data seems to be skewed to the right, which would be helped by a log transform. 
+
+library(glmnet)
+set.seed(234)
+
+
+biomarker_LASSO = biomarker_clean %>% 
+  select(-ados) %>% 
+  mutate(class = as.numeric(group == 'ASD'))
+partitions <- biomarker_LASSO %>%
+  initial_split(prop = 0.8)
+
+x_train <- training(partitions) %>%
+  select(-group, -class) %>%
+  as.matrix()
+y_train <- training(partitions) %>%
+  pull(class)
+
+plot(cv.glmnet(x_train, y_train, family = 'binomial', nfolds = 5, type.measure = 'deviance'))
+
+lambda = exp(-1.8)
+
+lambda_test <- cv.glmnet(x_train, y_train, family = 'binomial', nfolds=5)
+lambda_min <- lambda_test$lambda.1se
+lambda_min = exp(-3.5)
+final_fit <- glmnet(x_train, y_train, family = 'binomial', lambda = lambda_min)
+final_fit_df = tidy(final_fit)
+
+
+proteins_panel = final_fit_df %>%
+  filter(term != "(Intercept)") %>% 
+  pull(term)
+
+biomarker_panel <- biomarker_clean %>%
+  select(group, any_of(proteins_panel)) %>%
+  mutate(class = (group == 'ASD')) %>%
+  select(-group)
+
+biomarker_panel
+
+biomarker_split <- biomarker_panel %>%
+  initial_split(prop = 0.8)
+
+fit <- glm(class ~ ., 
+           data = training(biomarker_split), 
+           family = 'binomial')
+
+class_metrics <- metric_set(accuracy)
+
+testing(biomarker_split) %>%
+  add_predictions(fit, type = 'response') %>%
+  mutate(est = as.factor(pred > 0.5), tr_c = as.factor(class)) %>%
+  class_metrics(estimate = est,
+                truth = tr_c, pred,
+                event_level = 'second')
+
