@@ -32,7 +32,7 @@ Write a brief one-paragraph abstract that describes the contents of your write-u
 
 *Write a brief data description, including: how data were obtained; sample characteristics; variables measured; and data preprocessing. This can be largely based on the source paper and should not exceed 1-2 paragraphs.*
 
-Serum samples from 76 boys with ASD and 78 typically developing (TD) boys, 18 months-8 years of age, were analyzed to identify possible early biological markers for ASD. The ASD group was comprised of 76 subjects with a mean age of 5.6 years (SD 1.7 years). The TD group was comprised of 78 subjects with a mean age of 5.7 years (SD 2.0 years). Measured variables include ADOS and 1317 proteins. For the ASD group, ADOS diagnostic algorithms consisting of two behavioral domains: Social Affect (SA) and Restricted and Repetitive Behaviors (RRB) were used to determine an ADOS total score, which provides a continuous measure of overall ASD symptom severity. All subjects were healthy, defined as being fever-free for 24 hours, and presenting with no clinical symptoms. A fasting blood draw was performed on ASD and TD subjects between the hours of 8–10 am in a 3.5 ml Serum Separation Tube using standard venipuncture technique. 
+Serum samples from 76 boys with ASD and 78 typically developing (TD) boys, 18 months-8 years of age, were analyzed to identify possible early biological markers for ASD. The ASD group was comprised of 76 subjects with a mean age of 5.6 years (SD 1.7 years). The TD group was comprised of 78 subjects with a mean age of 5.7 years (SD 2.0 years). Measured variables include ADOS and 1317 proteins. For the ASD group, ADOS diagnostic algorithms consisting of two behavioral domains: Social Affect (SA) and Restricted and Repetitive Behaviors (RRB) were used to determine an ADOS total score, which provides a continuous measure of overall ASD symptom severity. All subjects were healthy, defined as being fever-free for 24 hours, and presenting with no clinical symptoms. A fasting blood draw was performed on ASD and TD subjects between the hours of 8--10 am in a 3.5 ml Serum Separation Tube using standard venipuncture technique. 
 
 In the published data, 192 proteins failed to pass quality control (QC). After removing these proteins, 1,125 proteins were analyzed. The protein abundance data were normalized by taking log10 transform and then z-transformation. To deal with outliers, any z-transformed values less than -3 and greater than 3 were clipped to -3 and 3, respectively. 
 
@@ -40,7 +40,7 @@ In the published data, 192 proteins failed to pass quality control (QC). After r
 
 *Summarize the methodology of the paper in 1-3 paragraphs. You need not explain the methods in depth as we did in class; just indicate what methods were used and how they were combined. If possible, include a diagram that depicts the methodological design. (Quarto has support for [GraphViz and Mermaid flowcharts](https://quarto.org/docs/authoring/diagrams.html).) Provide key results: the proteins selected for the classifier and the estimated accuracy.*
 
-Hewitson et al. first used the R package ‘randomForest’ to train the RF models and calculate feature importance. They chose MeanDecreaseGini as the surrogate representing a protein’s importance in predicting ASD versus TD. With normalized data, they trained an RF model 1000 times. Each protein’s importance value was averaged over the 1000 runs. The 10 proteins with the highest averaged importance values were chosen for the RF-based prediction model. For multiple testing, Hewitson et al. used t-tests to select the 10 proteins with the most highly significant t-test values for the prediction model. Thirdly, a correlation approach was used to calculate each protein’s correlation with ADOS total scores (SA + RRB) as a measure of ASD severity. Based upon the absolute values of each protein’s correlation coefficient, the 10 most highly correlated proteins were selected as the correlation-based predictive proteins. After identifying the top-10 predictive proteins from each of the 3 models, they found 5 proteins that were common to each method used which are considered ‘core’ proteins. A logistic regression model was used with datasets based upon the RF model, the t-test model and the correlation model, taking the subjects’ assigned group (ASD or TD) as output variables to evaluate the 13 additional proteins. 
+Hewitson et al. first used the R package 'randomForest' to train the RF models and calculate feature importance. They chose MeanDecreaseGini as the surrogate representing a protein's importance in predicting ASD versus TD. With normalized data, they trained an RF model 1000 times. Each protein's importance value was averaged over the 1000 runs. The 10 proteins with the highest averaged importance values were chosen for the RF-based prediction model. For multiple testing, Hewitson et al. used t-tests to select the 10 proteins with the most highly significant t-test values for the prediction model. Thirdly, a correlation approach was used to calculate each protein's correlation with ADOS total scores (SA + RRB) as a measure of ASD severity. Based upon the absolute values of each protein's correlation coefficient, the 10 most highly correlated proteins were selected as the correlation-based predictive proteins. After identifying the top-10 predictive proteins from each of the 3 models, they found 5 proteins that were common to each method used which are considered 'core' proteins. A logistic regression model was used with datasets based upon the RF model, the t-test model and the correlation model, taking the subjects' assigned group (ASD or TD) as output variables to evaluate the 13 additional proteins. 
 
 Five core proteins mitogen-activated protein kinase 14 (MAPK14), immunoglobulin D (IgD), dermatopontin (DERM), ephrin type-B receptor 2 (EPHB2), and soluble urokinase-type plasminogen activator receptor (suPAR) are used. And four additional proteins are selected for their resulted increase in AUC when being added which are receptor tyrosine kinase-like orphan receptor 1 \[ROR1\], platelet receptor Gl24 \[GI24\], eukaryotic translation initiation factor 4H \[elF-4H\], and arylsulfatase B \[ARSB\]. Combining the 5 core proteins with the additional 4 proteins resulted in an AUC = 0.860±0.064, with a sensitivity = 0.833±0.118, and specificity = 0.846±0.118, and represents the 9 optimal proteins (AUC_Optimal).
 
@@ -51,6 +51,7 @@ Five core proteins mitogen-activated protein kinase 14 (MAPK14), immunoglobulin 
 ### Impact of preprocessing and outliers
 
 Tasks 1-2
+
 ```{r, message=FALSE}
 #SETUP
 # get names
@@ -104,7 +105,8 @@ ggplot(biomarker_long, aes(x = value)) +
        y = "Frequency") +
   theme_minimal()
 ```
-The data seems to be skewed to the right, which would be helped by a log transform. 
+
+The data seems to be heavily skewed to the right. By doing a log transform, the skewness of the data would be lessened, making the patterns easier to analyze as most models assume constant variance.
 
 ```{r}
 ## task 2
@@ -118,3 +120,62 @@ Task 3
 ### Improved classifier
 
 Task 4
+
+```{r}
+library(glmnet)
+library(tidyverse)
+library(tidymodels)
+library(tibble)
+library(modelr)
+
+
+set.seed(123)
+
+
+biomarker_LASSO = biomarker_clean %>% 
+  select(-ados) %>% 
+  mutate(class = as.numeric(group == 'ASD'))
+partitions <- biomarker_LASSO %>%
+  initial_split(prop = 0.8)
+
+x_train <- training(partitions) %>%
+  select(-group, -class) %>%
+  as.matrix()
+y_train <- training(partitions) %>%
+  pull(class)
+
+lambda_test <- cv.glmnet(x_train, y_train, family = 'binomial', nfolds=5)
+lambda_min <- lambda_test$lambda.1se
+lambda_min = exp(-1.75)
+final_fit <- glmnet(x_train, y_train, family = 'binomial', lambda = lambda_min)
+final_fit_df = tidy(final_fit)
+
+
+proteins_panel = final_fit_df %>%
+  filter(term != "(Intercept)") %>% 
+  pull(term)
+biomarker_panel <- biomarker_clean %>%
+  select(group, any_of(proteins_panel)) %>%
+  mutate(class = (group == 'ASD')) %>%
+  select(-group)
+
+biomarker_panel
+
+biomarker_split <- biomarker_panel %>%
+  initial_split(prop = 0.8)
+
+fit <- glm(class ~ ., 
+           data = training(biomarker_split), 
+           family = 'binomial')
+
+class_metrics <- metric_set(accuracy)
+
+testing(biomarker_split) %>%
+  add_predictions(fit, type = 'response') %>%
+  mutate(est = as.factor(pred > 0.5), tr_c = as.factor(class)) %>%
+  class_metrics(estimate = est,
+                truth = tr_c, pred,
+                event_level = 'second')
+
+
+```
