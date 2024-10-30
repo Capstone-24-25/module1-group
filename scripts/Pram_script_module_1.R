@@ -94,46 +94,81 @@ ggplot(outlier_summary_2, aes(x = group, y = total_outliers, color = group)) +
 
 #4
 
-library(glmnet)
-install.packages("glmnet")
+library(tidyverse)
 library(tidymodels)
+library(glmnet)
+library(broom)
 
 # read in data
-biomarker_clean <- read_csv('data/biomarker-raw.csv')
-# partition
-set.seed(101622)
-partitions <- biomarker_clean %>%
+biomarker_clean <- read_csv('data/biomarker-raw.csv', 
+                            skip = 2,
+                            col_select = -2L,
+                            col_names = c('group', 
+                                          'empty',
+                                          pull(var_names, abbreviation),
+                                          'ados'),
+                            na = c('-', '')) %>%
+  filter(!is.na(group)) %>%
+  # log transform, center and scale, and trim
+  mutate(across(.cols = -c(group, ados), 
+                ~ trim(scale(log10(.x))[, 1], .at = 3))) %>%
+  # reorder columns
+  select(group, ados, everything())
+
+################# Code starts here
+set.seed(429)
+biomarker_LASSO <- biomarker_clean %>% 
+  select(-ados) %>% 
+  mutate(class = as.numeric(group == 'ASD'))
+
+partitions <- biomarker_LASSO %>%
   initial_split(prop = 0.8)
 
 x_train <- training(partitions) %>%
+  select(-group, -class) %>%
   as.matrix()
-y_train <- training(partitions)
+y_train <- training(partitions) %>%
+  pull(class)
+
+#lambda_test <- cv.glmnet(x_train, y_train, family = 'binomial', nfolds = 10) # Increased nfolds for more robust CV
+#lambda_min <- lambda_test$lambda.min  # Use lambda.min to ensure lower bias if accuracy improves
 
 
-
-# reproducibility
-set.seed(102022)
-
-# multiple partitioning for lambda selection
-cv_out <- cv.glmnet(x_train, 
-                    y_train, 
-                    family = 'binomial', 
-                    nfolds = 5, 
-                    type.measure = 'deviance')
-
-cvout_df <- tidy(cv_out) 
+#### For less proteins
+lambda_test <- cv.glmnet(x_train, y_train, family = 'binomial', nfolds = 5)
+lambda_min <- lambda_test$lambda.1se
+# **Adjust lambda to control number of proteins in the panel (Used 15)
+lambda_adjusted <- exp(-1.95) # 
 
 
+final_fit <- glmnet(x_train, y_train, family = 'binomial', lambda = lambda_min)
+final_fit_df <- tidy(final_fit)
+
+proteins_panel <- final_fit_df %>%
+  filter(term != "(Intercept)") %>% 
+  pull(term)
+
+biomarker_panel <- biomarker_clean %>%
+  select(group, any_of(proteins_panel)) %>%
+  mutate(class = as.factor(group == 'ASD')) %>%
+  select(-group)
+
+biomarker_split <- biomarker_panel %>%
+  initial_split(prop = 0.8)
+
+fit <- glm(class ~ ., 
+           data = training(biomarker_split), 
+           family = 'binomial')
+
+class_metrics <- metric_set(accuracy, roc_auc)
+
+testing(biomarker_split) %>%
+  add_predictions(fit, type = 'response') %>%
+  mutate(est = as.factor(pred > 0.5), tr_c = as.factor(class)) %>%
+  class_metrics(estimate = est,
+                truth = tr_c, pred,
+                event_level = 'second')
 
 
-
-
-
-
-
-
-
-
-
-
+#Accuracy is 0.742
 
