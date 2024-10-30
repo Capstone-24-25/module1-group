@@ -61,8 +61,30 @@ outlier_summary <- outlier_counts %>%
 
 # See that the average amount of outliers for ASD is 13.2 and 17.6 for TD
 
+
+
+
+
+
+
+biomarker_data_outliers <- read_csv('data/biomarker-raw.csv', 
+                           skip = 2,
+                           col_select = -2L,
+                           col_names = c('group', 'empty', pull(var_names, abbreviation), 'ados'),
+                           na = c('-', '')) %>%
+  filter(!is.na(group)) %>%
+  mutate(across(-c(group, ados), ~ abs(scale(log10(.x))[, 1]) > 3, .names = "outlier_{.col}"))
+
+
+
+
+
+
+
+
+
 # Count outliers for each subject
-outlier_summary_2 <- biomarker_data %>%
+outlier_summary_2 <- biomarker_data_outliers %>%
   mutate(total_outliers = rowSums(select(., starts_with("outlier_")))) %>%
   select(group, total_outliers)
 
