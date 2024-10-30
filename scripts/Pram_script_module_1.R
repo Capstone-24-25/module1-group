@@ -92,9 +92,36 @@ ggplot(outlier_summary_2, aes(x = group, y = total_outliers, color = group)) +
 
 
 
+#4
+
+library(glmnet)
+install.packages("glmnet")
+library(tidymodels)
+
+# read in data
+biomarker_clean <- read_csv('data/biomarker-raw.csv')
+# partition
+set.seed(101622)
+partitions <- biomarker_clean %>%
+  initial_split(prop = 0.8)
+
+x_train <- training(partitions) %>%
+  as.matrix()
+y_train <- training(partitions)
 
 
 
+# reproducibility
+set.seed(102022)
+
+# multiple partitioning for lambda selection
+cv_out <- cv.glmnet(x_train, 
+                    y_train, 
+                    family = 'binomial', 
+                    nfolds = 5, 
+                    type.measure = 'deviance')
+
+cvout_df <- tidy(cv_out) 
 
 
 
