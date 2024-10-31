@@ -91,3 +91,5 @@ s3 <- corr_data %>%
   summarize(correlation = cor(as.numeric(ados), level)) %>%
   arrange(desc(correlation)) %>%
   slice_head(n = 15)  # Select top 10 proteins
+
+intersect(s1,s2)

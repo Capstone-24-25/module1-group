@@ -14,8 +14,6 @@ execute:
   cache: true
 ---
 
-Use this as a template. Keep the headers and remove all other text. In all, your report can be quite short. When it is complete, render and then push changes to your team repository.
-
 ```{r}
 # load any other packages and read data here
 library(tidyverse)
@@ -26,11 +24,9 @@ load("./data/biomarker-clean.RData")
 
 ## Abstract
 
-Write a brief one-paragraph abstract that describes the contents of your write-up.
+Based on the studies on biomarkers of ASD done by Hewitson et al., we use the whole dataset to further explore the impacts of various modifications. In part one, we examine the distribution of raw values for a sample of proteins including HXK2, IL-4, PAI-1, PGP9.5, and STK16. In part two, we continue working on exploratory analysis of outlying values before conducting the outlier trimming in the preprocessing. In part three, we repeated the selection methods which are random forests, multiple testing, and correlation tests on a training dataset. From each of the selection methods, we choose 15 top predictive proteins and use a fuzzy intersection to form our protein panel. In part four, we use a binomial generalized linear model to example the accuracy of an alternative protein panel.
 
 ## Dataset
-
-*Write a brief data description, including: how data were obtained; sample characteristics; variables measured; and data preprocessing. This can be largely based on the source paper and should not exceed 1-2 paragraphs.*
 
 Serum samples from 76 boys with ASD and 78 typically developing (TD) boys, 18 months-8 years of age, were analyzed to identify possible early biological markers for ASD. The ASD group was comprised of 76 subjects with a mean age of 5.6 years (SD 1.7 years). The TD group was comprised of 78 subjects with a mean age of 5.7 years (SD 2.0 years). Measured variables include ADOS and 1317 proteins. For the ASD group, ADOS diagnostic algorithms consisting of two behavioral domains: Social Affect (SA) and Restricted and Repetitive Behaviors (RRB) were used to determine an ADOS total score, which provides a continuous measure of overall ASD symptom severity. All subjects were healthy, defined as being fever-free for 24 hours, and presenting with no clinical symptoms. A fasting blood draw was performed on ASD and TD subjects between the hours of 8--10 am in a 3.5 ml Serum Separation Tube using standard venipuncture technique. 
 
@@ -38,19 +34,15 @@ In the published data, 192 proteins failed to pass quality control (QC). After r
 
 ## Summary of published analysis
 
-*Summarize the methodology of the paper in 1-3 paragraphs. You need not explain the methods in depth as we did in class; just indicate what methods were used and how they were combined. If possible, include a diagram that depicts the methodological design. (Quarto has support for [GraphViz and Mermaid flowcharts](https://quarto.org/docs/authoring/diagrams.html).) Provide key results: the proteins selected for the classifier and the estimated accuracy.*
-
 Hewitson et al. first used the R package 'randomForest' to train the RF models and calculate feature importance. They chose MeanDecreaseGini as the surrogate representing a protein's importance in predicting ASD versus TD. With normalized data, they trained an RF model 1000 times. Each protein's importance value was averaged over the 1000 runs. The 10 proteins with the highest averaged importance values were chosen for the RF-based prediction model. For multiple testing, Hewitson et al. used t-tests to select the 10 proteins with the most highly significant t-test values for the prediction model. Thirdly, a correlation approach was used to calculate each protein's correlation with ADOS total scores (SA + RRB) as a measure of ASD severity. Based upon the absolute values of each protein's correlation coefficient, the 10 most highly correlated proteins were selected as the correlation-based predictive proteins. After identifying the top-10 predictive proteins from each of the 3 models, they found 5 proteins that were common to each method used which are considered 'core' proteins. A logistic regression model was used with datasets based upon the RF model, the t-test model and the correlation model, taking the subjects' assigned group (ASD or TD) as output variables to evaluate the 13 additional proteins. 
 
 Five core proteins mitogen-activated protein kinase 14 (MAPK14), immunoglobulin D (IgD), dermatopontin (DERM), ephrin type-B receptor 2 (EPHB2), and soluble urokinase-type plasminogen activator receptor (suPAR) are used. And four additional proteins are selected for their resulted increase in AUC when being added which are receptor tyrosine kinase-like orphan receptor 1 \[ROR1\], platelet receptor Gl24 \[GI24\], eukaryotic translation initiation factor 4H \[elF-4H\], and arylsulfatase B \[ARSB\]. Combining the 5 core proteins with the additional 4 proteins resulted in an AUC = 0.860±0.064, with a sensitivity = 0.833±0.118, and specificity = 0.846±0.118, and represents the 9 optimal proteins (AUC_Optimal).
 
 ## Findings
 
-*Summarize your findings here. I've included some subheaders in a way that seems natural to me; you can structure this section however you like.*
-
 ### Impact of preprocessing and outliers
 
-Tasks 1-2
+Tasks 1
 
 ```{r, message=FALSE}
 #SETUP
@@ -107,6 +99,8 @@ ggplot(biomarker_long, aes(x = value)) +
 ```
 
 The data seems to be heavily skewed to the right. By doing a log transform, the skewness of the data would be lessened, making the patterns easier to analyze as most models assume constant variance.
+
+Task 2
 
 ```{r}
 ## task 2
