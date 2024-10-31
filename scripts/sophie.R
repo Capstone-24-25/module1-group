@@ -92,4 +92,3 @@ s3 <- corr_data %>%
   arrange(desc(correlation)) %>%
   slice_head(n = 15)  # Select top 10 proteins
 
-intersect(s1,s2)
