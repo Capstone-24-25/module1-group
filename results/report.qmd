@@ -24,7 +24,7 @@ load("./data/biomarker-clean.RData")
 
 ## Abstract
 
-Based on the studies on biomarkers of ASD done by Hewitson et al., we use the whole dataset to further explore the impacts of various modifications. In part one, we examine the distribution of raw values for a sample of proteins including HXK2, IL-4, PAI-1, PGP9.5, and STK16. In part two, we continue working on exploratory analysis of outlying values before conducting the outlier trimming in the preprocessing. In part three, we repeated the selection methods which are random forests, multiple testing, and correlation tests on a training dataset. From each of the selection methods, we choose 15 top predictive proteins and use a fuzzy intersection to form our protein panel. In part four, we use a binomial generalized linear model to example the accuracy of an alternative protein panel.
+Based on the studies on biomarkers of ASD done by Hewitson et al., we use the whole dataset to further explore the impacts of various modifications. In part one, we examine the distribution of raw values for a sample of proteins including HXK2, IL-4, PAI-1, PGP9.5, and STK16. In part two, we continue working on exploratory analysis of outlying values before conducting the outlier trimming in the preprocessing. In part three, we repeated the selection methods which are random forests, multiple testing, and correlation tests on a training dataset with modifications. From each of the selection methods, we choose 25 top predictive proteins and use a fuzzy intersection to form our protein panel. In part four, we use a simpler panel to examine the corresponding accuracy.
 
 ## Dataset
 
@@ -240,7 +240,7 @@ test_bio <- testing(partitions)
 asd_clean <- train_bio %>% 
   select(-ados)
 
-# multiple testing
+# t tests
 asd_nested <- asd_clean %>%
   pivot_longer(-group, 
                names_to = 'protein', 
@@ -274,12 +274,13 @@ tt_corrected <- tt_out %>%
          p_by = p_value*m*hm/rank,
          p_bonf = p_value*m)
 
-# top 25 for multiple testing
+# top 10 for multiple testing
 s1 <- tt_corrected %>%
   select(protein, p_by) %>%
-  slice_min(order_by = p_by, n = 25) %>%
+  slice_min(order_by = p_by, n = 10) %>%
   pull(protein)
-print("Top 25 proteins for multiple testing:")
+
+print("Top 10 proteins for multiple testing:")
 s1
 
 # random forest
@@ -294,9 +295,10 @@ rf_out <- randomForest(x = asd_preds, # predictors
 s2 <- rf_out$importance %>% 
   as_tibble() %>%
   mutate(protein = rownames(rf_out$importance)) %>%
-  slice_max(MeanDecreaseGini, n = 25) %>%
+  slice_max(MeanDecreaseGini, n = 10) %>%
   pull(protein)
-print("Top 25 proteins for random forest:")
+
+print("Top 10 proteins for random forest:")
 s2
 
 ## correlation method
@@ -310,10 +312,42 @@ s3 <- corr_data %>%
   group_by(protein) %>%
   summarize(correlation = cor(as.numeric(ados), level)) %>%
   arrange(desc(correlation)) %>%
-  slice_head(n = 25)  # Select top 25 proteins
-print("Top 25 proteins for correlation testing: ")
+  slice_head(n = 10)  # Select top 10 proteins
+
+print("Top 10 proteins for correlation method:")
 s3$protein
+
+
+proteins_sstar <- intersect(s1, s2)
+
+proteins_sstar
+
+biomarker_sstar <- biomarker_clean %>%
+  select(group, any_of(proteins_sstar)) %>%
+  mutate(class = (group == 'ASD')) %>%
+  select(-group)
+
+biomarker_split <- biomarker_sstar %>%
+  initial_split(prop = 0.8)
+
+fit <- glm(class ~ ., 
+           data = training(biomarker_split), 
+           family = 'binomial')
+
+class_metrics <- metric_set(sensitivity, 
+                            specificity, 
+                            accuracy,
+                            roc_auc)
+
+testing(biomarker_split) %>%
+  add_predictions(fit, type = 'response') %>%
+  mutate(est = as.factor(pred > 0.5), tr_c = as.factor(class)) %>%
+  class_metrics(estimate = est,
+                truth = tr_c, pred,
+                event_level = 'second')
 ```
+
+By only applying the selection methods to training dataset, there are only three core proteins which are "DERM", "TGF-b R III", "EPHB2". We are able to get a similar sensitivity, specificity, accuracy and roc_auc values which are around 0.7.  
 
 ```{r}
 
@@ -614,14 +648,4 @@ testing(biomarker_split) %>%
 
 ```
 
-First, we split our data into training and testing sets, with 80% of the data being training data. Next, we performed cross validation on the training set to get a panel of proteins. Then, we fit a binomial generalized linear model to this panel of proteins and evaluated our metrics. We reported an accuracy of 0.70967 on our panel of proteins, which included "FSTIL1"
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-, "Calcineurin", "IgD", and "DERM".
+First, we split our data into training and testing sets, with 80% of the data being training data. Next, we performed cross validation on the training set to get a panel of proteins. Then, we fit a binomial generalized linear model to this panel of proteins and evaluated our metrics. We reported an accuracy of 0.871 on our panel of proteins.

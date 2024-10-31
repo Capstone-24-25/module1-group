@@ -58,11 +58,14 @@ tt_corrected <- tt_out %>%
          p_by = p_value*m*hm/rank,
          p_bonf = p_value*m)
 
-# top 15 for multiple testing
+# top 10 for multiple testing
 s1 <- tt_corrected %>%
   select(protein, p_by) %>%
-  slice_min(order_by = p_by, n = 15) %>%
+  slice_min(order_by = p_by, n = 10) %>%
   pull(protein)
+
+print("Top 10 proteins for multiple testing:")
+s1
 
 # random forest
 asd_response <- asd_clean$group
@@ -76,8 +79,11 @@ rf_out <- randomForest(x = asd_preds, # predictors
 s2 <- rf_out$importance %>% 
   as_tibble() %>%
   mutate(protein = rownames(rf_out$importance)) %>%
-  slice_max(MeanDecreaseGini, n = 15) %>%
+  slice_max(MeanDecreaseGini, n = 10) %>%
   pull(protein)
+
+print("Top 10 proteins for random forest:")
+s2
 
 ## correlation method
 corr_data <- train_bio %>% 
@@ -90,5 +96,36 @@ s3 <- corr_data %>%
   group_by(protein) %>%
   summarize(correlation = cor(as.numeric(ados), level)) %>%
   arrange(desc(correlation)) %>%
-  slice_head(n = 15)  # Select top 10 proteins
+  slice_head(n = 10)  # Select top 10 proteins
 
+print("Top 10 proteins for correlation method:")
+s3$protein
+
+
+proteins_sstar <- intersect(s1, s2)
+
+proteins_sstar
+
+biomarker_sstar <- biomarker_clean %>%
+  select(group, any_of(proteins_sstar)) %>%
+  mutate(class = (group == 'ASD')) %>%
+  select(-group)
+
+biomarker_split <- biomarker_sstar %>%
+  initial_split(prop = 0.8)
+
+fit <- glm(class ~ ., 
+           data = training(biomarker_split), 
+           family = 'binomial')
+
+class_metrics <- metric_set(sensitivity, 
+                            specificity, 
+                            accuracy,
+                            roc_auc)
+
+testing(biomarker_split) %>%
+  add_predictions(fit, type = 'response') %>%
+  mutate(est = as.factor(pred > 0.5), tr_c = as.factor(class)) %>%
+  class_metrics(estimate = est,
+                truth = tr_c, pred,
+                event_level = 'second')
