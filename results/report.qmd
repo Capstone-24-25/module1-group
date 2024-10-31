@@ -228,7 +228,7 @@ library(tibble)
 library(modelr)
 
 
-set.seed(123)
+set.seed(1)
 
 
 biomarker_LASSO = biomarker_clean %>% 
@@ -258,7 +258,7 @@ biomarker_panel <- biomarker_clean %>%
   mutate(class = (group == 'ASD')) %>%
   select(-group)
 
-biomarker_panel
+print(str(biomarker_panel))
 
 biomarker_split <- biomarker_panel %>%
   initial_split(prop = 0.8)
@@ -280,4 +280,14 @@ testing(biomarker_split) %>%
 
 ```
 
-First, we split our data into training and testing sets, with 80% of the data being training data. Next, we performed cross validation on the training set to get a panel of proteins. Then, we fit a binomial generalized linear model to this panel of proteins and evaluated our metrics. We reported an accuracy of 0.70967 on our panel of proteins, which included "CXCL16, soluble", "MAPK2", "Calcineurin", "IgD", and "DERM".
+First, we split our data into training and testing sets, with 80% of the data being training data. Next, we performed cross validation on the training set to get a panel of proteins. Then, we fit a binomial generalized linear model to this panel of proteins and evaluated our metrics. We reported an accuracy of 0.70967 on our panel of proteins, which included "FSTIL1"
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+, "Calcineurin", "IgD", and "DERM".
