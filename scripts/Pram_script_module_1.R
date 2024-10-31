@@ -138,7 +138,7 @@ biomarker_clean <- read_csv('data/biomarker-raw.csv',
   select(group, ados, everything())
 
 ################# Code starts here
-set.seed(429)
+set.seed(42239)
 biomarker_LASSO <- biomarker_clean %>% 
   select(-ados) %>% 
   mutate(class = as.numeric(group == 'ASD'))
@@ -192,5 +192,5 @@ testing(biomarker_split) %>%
                 event_level = 'second')
 
 
-#Accuracy is 0.742
+#Accuracy is 0.871
 
