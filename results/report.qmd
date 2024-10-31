@@ -347,7 +347,7 @@ testing(biomarker_split) %>%
                 event_level = 'second')
 ```
 
-By only applying the selection methods to training dataset, there are only three core proteins which are "DERM", "TGF-b R III", "EPHB2". We are able to get a similar sensitivity, specificity, accuracy and roc_auc values which are around 0.7.  
+By only applying the selection methods to training dataset, there are only three core proteins which are "DERM", "TGF-b R III", "EPHB2". We are able to get a similar sensitivity, specificity, accuracy and roc_auc values which are around 0.7.
 
 ```{r}
 
@@ -626,7 +626,7 @@ biomarker_panel <- biomarker_clean %>%
   mutate(class = (group == 'ASD')) %>%
   select(-group)
 
-print(str(biomarker_panel))
+#print(str(biomarker_panel))
 
 biomarker_split <- biomarker_panel %>%
   initial_split(prop = 0.8)
