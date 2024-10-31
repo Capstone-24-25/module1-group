@@ -216,6 +216,8 @@ ggplot(outlier_summary_2, aes(x = group, y = total_outliers, color = group)) +
 
 ```
 
+We found that the average amount of outliers for ASD is 13.2 and 17.6 for TD. Also, we can see that very subject had at least 1 outlier except for 2. 5 subjects had a dispropportionate amount of outliers (\>100), and 2 of these subjects were ASD while 4 were TD. As you can see in our graph, outliers didn't appear more frequent in one group in regards to another.
+
 ### Methodlogical variations
 
 Task 3
@@ -281,4 +283,7 @@ testing(biomarker_split) %>%
                 event_level = 'second')
 
 
+
 ```
+
+First, we split our data into training and testing sets, with 80% of the data being training data. Next, we performed cross validation on the training set to get a panel of proteins. Then, we fit a binomial generalized linear model to this panel of proteins and evaluated our metrics. We reported an accuracy of 0.70967 on our panel of proteins, which included "CXCL16, soluble", "MAPK2", "Calcineurin", "IgD", and "DERM".
