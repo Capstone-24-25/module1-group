@@ -1,7 +1,7 @@
 ---
 title: "Biomarkers of ASD"
-subtitle: "If you want a subtitle put it here"
-author: "List names here"
+subtitle: ""
+author: "Sophie Shi, Keon Bruce Dibley, Colin Tien Nguyen, Pramukh Shubh Shankar"
 date: last-modified
 published-title: "Updated"
 editor: visual
@@ -14,37 +14,638 @@ execute:
   cache: true
 ---
 
-Use this as a template. Keep the headers and remove all other text. In all, your report can be quite short. When it is complete, render and then push changes to your team repository.
-
 ```{r}
 # load any other packages and read data here
 library(tidyverse)
+library(ggplot2)
+
+load("./data/biomarker-clean.RData")
 ```
 
 ## Abstract
 
-Write a brief one-paragraph abstract that describes the contents of your write-up.
+Based on the studies on biomarkers of ASD done by Hewitson et al., we use the whole dataset to further explore the impacts of various modifications. In part one, we examine the distribution of raw values for a sample of proteins including HXK2, IL-4, PAI-1, PGP9.5, and STK16. In part two, we continue working on exploratory analysis of outlying values before conducting the outlier trimming in the preprocessing. In part three, we repeated the selection methods which are random forests, multiple testing, and correlation tests on a training dataset with modifications. From each of the selection methods, we choose 25 top predictive proteins and use a fuzzy intersection to form our protein panel. In part four, we use a simpler panel to examine the corresponding accuracy.
 
 ## Dataset
 
-Write a brief data description, including: how data were obtained; sample characteristics; variables measured; and data preprocessing. This can be largely based on the source paper and should not exceed 1-2 paragraphs.
+Serum samples from 76 boys with ASD and 78 typically developing (TD) boys, 18 months-8 years of age, were analyzed to identify possible early biological markers for ASD. The ASD group was comprised of 76 subjects with a mean age of 5.6 years (SD 1.7 years). The TD group was comprised of 78 subjects with a mean age of 5.7 years (SD 2.0 years). Measured variables include ADOS and 1317 proteins. For the ASD group, ADOS diagnostic algorithms consisting of two behavioral domains: Social Affect (SA) and Restricted and Repetitive Behaviors (RRB) were used to determine an ADOS total score, which provides a continuous measure of overall ASD symptom severity. All subjects were healthy, defined as being fever-free for 24 hours, and presenting with no clinical symptoms. A fasting blood draw was performed on ASD and TD subjects between the hours of 8--10 am in a 3.5 ml Serum Separation Tube using standard venipuncture technique. 
+
+In the published data, 192 proteins failed to pass quality control (QC). After removing these proteins, 1,125 proteins were analyzed. The protein abundance data were normalized by taking log10 transform and then z-transformation. To deal with outliers, any z-transformed values less than -3 and greater than 3 were clipped to -3 and 3, respectively. 
 
 ## Summary of published analysis
 
-Summarize the methodology of the paper in 1-3 paragraphs. You need not explain the methods in depth as we did in class; just indicate what methods were used and how they were combined. If possible, include a diagram that depicts the methodological design. (Quarto has support for [GraphViz and Mermaid flowcharts](https://quarto.org/docs/authoring/diagrams.html).) Provide key results: the proteins selected for the classifier and the estimated accuracy.
+Hewitson et al. first used the R package 'randomForest' to train the RF models and calculate feature importance. They chose MeanDecreaseGini as the surrogate representing a protein's importance in predicting ASD versus TD. With normalized data, they trained an RF model 1000 times. Each protein's importance value was averaged over the 1000 runs. The 10 proteins with the highest averaged importance values were chosen for the RF-based prediction model. For multiple testing, Hewitson et al. used t-tests to select the 10 proteins with the most highly significant t-test values for the prediction model. Thirdly, a correlation approach was used to calculate each protein's correlation with ADOS total scores (SA + RRB) as a measure of ASD severity. Based upon the absolute values of each protein's correlation coefficient, the 10 most highly correlated proteins were selected as the correlation-based predictive proteins. After identifying the top-10 predictive proteins from each of the 3 models, they found 5 proteins that were common to each method used which are considered 'core' proteins. A logistic regression model was used with datasets based upon the RF model, the t-test model and the correlation model, taking the subjects' assigned group (ASD or TD) as output variables to evaluate the 13 additional proteins. 
+
+Five core proteins mitogen-activated protein kinase 14 (MAPK14), immunoglobulin D (IgD), dermatopontin (DERM), ephrin type-B receptor 2 (EPHB2), and soluble urokinase-type plasminogen activator receptor (suPAR) are used. And four additional proteins are selected for their resulted increase in AUC when being added which are receptor tyrosine kinase-like orphan receptor 1 \[ROR1\], platelet receptor Gl24 \[GI24\], eukaryotic translation initiation factor 4H \[elF-4H\], and arylsulfatase B \[ARSB\]. Combining the 5 core proteins with the additional 4 proteins resulted in an AUC = 0.860±0.064, with a sensitivity = 0.833±0.118, and specificity = 0.846±0.118, and represents the 9 optimal proteins (AUC_Optimal).
 
 ## Findings
 
-Summarize your findings here. I've included some subheaders in a way that seems natural to me; you can structure this section however you like.
-
 ### Impact of preprocessing and outliers
 
-Tasks 1-2
+Tasks 1
+
+```{r, message=FALSE}
+#SETUP
+# get names
+var_names <- read_csv('data/biomarker-raw.csv', 
+                      col_names = F, 
+                      n_max = 2, 
+                      col_select = -(1:2)) %>%
+  t() %>%
+  as_tibble() %>%
+  rename(name = V1, 
+         abbreviation = V2) %>%
+  na.omit()
+
+# function for trimming outliers
+trim <- function(x, .at){
+  x[abs(x) > .at] <- sign(x[abs(x) > .at])*.at
+  return(x)
+}
+
+# read in data
+biomarker_clean <- read_csv('data/biomarker-raw.csv', 
+                            skip = 2,
+                            col_select = -2L,
+                            col_names = c('group', 
+                                          'empty',
+                                          pull(var_names, abbreviation),
+                                          'ados'),
+                            na = c('-', '')) %>%
+  filter(!is.na(group)) %>%
+  # log transform, center and scale, and trim
+  mutate(across(.cols = -c(group, ados), 
+                ~ trim(scale(log10(.x))[, 1], .at = 3))) %>%
+  # reorder columns
+  select(group, ados, everything())
+
+##TASK 1
+set.seed(333) # Set seed for reproducibility
+sample_proteins <- sample(names(biomarker_clean)[-c(1, ncol(biomarker_clean))], 5)  # Exclude 'group' and 'ados'
+
+# Pivot data to a long format for easier plotting
+biomarker_long <- biomarker_clean %>%
+  select(all_of(sample_proteins)) %>%
+  pivot_longer(cols = everything(), names_to = "protein", values_to = "value")
+
+# Plot histograms of raw values for the sampled proteins
+ggplot(biomarker_long, aes(x = value)) +
+  geom_histogram(bins = 30, color = "black", fill = "skyblue", alpha = 0.7) +
+  facet_wrap(~ protein, scales = "free") +
+  labs(title = "Distribution of Raw Protein Levels",
+       x = "Protein Level",
+       y = "Frequency") +
+  theme_minimal()
+```
+
+The data seems to be heavily skewed to the right. By doing a log transform, the skewness of the data would be lessened, making the patterns easier to analyze as most models assume constant variance.
+
+Task 2
+
+```{r}
+## task 2
+# Read variable names as before
+var_names <- read_csv('data/biomarker-raw.csv', 
+                      col_names = F, 
+                      n_max = 2, 
+                      col_select = -(1:2)) %>%
+  t() %>%
+  as_tibble() %>%
+  rename(name = V1, 
+         abbreviation = V2) %>%
+  na.omit()
+
+# Read in data without trimming
+biomarker_clean_no_trim <- read_csv('data/biomarker-raw.csv', 
+                                    skip = 2,
+                                    col_select = -2L,
+                                    col_names = c('group', 
+                                                  'empty',
+                                                  pull(var_names, abbreviation),
+                                                  'ados'),
+                                    na = c('-', '')) %>%
+  filter(!is.na(group)) %>%
+  # log transform, center and scale without trimming
+  mutate(across(.cols = -c(group, ados), 
+                ~ scale(log10(.x))[, 1])) %>%
+  # reorder columns
+  select(group, ados, everything())
+
+
+
+
+
+
+
+# Define threshold for identifying outliers
+outlier_threshold <- 3
+
+# Count outliers per subject
+outlier_counts <- biomarker_clean_no_trim %>%
+  rowwise() %>%
+  mutate(outlier_count = sum(abs(c_across(-c(group, ados))) > outlier_threshold, na.rm = TRUE)) %>%
+  ungroup()
+
+############ EDA
+
+# Display the summary of outliers per group
+outlier_summary <- outlier_counts %>%
+  group_by(group) %>%
+  summarize(mean_outliers = mean(outlier_count),
+            max_outliers = max(outlier_count),
+            subjects_with_outliers = sum(outlier_count > 0))
+
+# See that the average amount of outliers for ASD is 13.2 and 17.6 for TD
+
+
+
+
+
+
+
+biomarker_data_outliers <- read_csv('data/biomarker-raw.csv', 
+                           skip = 2,
+                           col_select = -2L,
+                           col_names = c('group', 'empty', pull(var_names, abbreviation), 'ados'),
+                           na = c('-', '')) %>%
+  filter(!is.na(group)) %>%
+  mutate(across(-c(group, ados), ~ abs(scale(log10(.x))[, 1]) > 3, .names = "outlier_{.col}"))
+
+
+
+
+
+
+
+
+
+# Count outliers for each subject
+outlier_summary_2 <- biomarker_data_outliers %>%
+  mutate(total_outliers = rowSums(select(., starts_with("outlier_")))) %>%
+  select(group, total_outliers)
+
+# Display the table
+outlier_summary_2
+View(outlier_summary_2)
+
+
+#Every subject had at least 1 outlier except for 2
+#5 subjects had a dispropportionate amount of outliers (>100)
+## 2 of these subjects were ASD and 4 were TD
+#Outliers did not appear more frequent in one group in regards to another
+
+# Create the scatter plot
+ggplot(outlier_summary_2, aes(x = group, y = total_outliers, color = group)) +
+  geom_jitter(width = 0.2, height = 0, size = 3, alpha = 0.7) +
+  labs(
+    title = "Distribution of Outliers by Group",
+    x = "Group",
+    y = "Total Outliers"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("ASD" = "skyblue", "TD" = "salmon"))
+
+
+
+
+```
+
+We found that the average amount of outliers for ASD is 13.2 and 17.6 for TD. Also, we can see that very subject had at least 1 outlier except for 2. 5 subjects had a dispropportionate amount of outliers (\>100), and 2 of these subjects were ASD while 4 were TD. As you can see in our graph, outliers didn't appear more frequent in one group in regards to another.
 
 ### Methodlogical variations
 
 Task 3
 
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(modelr)
+library(rsample)
+library(yardstick)
+library(purrr)
+library(dplyr)
+library(randomForest)
+
+load("./data/biomarker-clean.RData")
+
+# partition
+set.seed(3435)
+
+partitions <- biomarker_clean %>%
+  initial_split(prop = 0.8)
+
+train_bio <- training(partitions)
+test_bio <- testing(partitions)
+
+asd_clean <- train_bio %>% 
+  select(-ados)
+
+# t tests
+asd_nested <- asd_clean %>%
+  pivot_longer(-group, 
+               names_to = 'protein', 
+               values_to = 'level') %>%
+  nest(data = c(level, group))
+
+asd_nested %>% head(4)
+
+# compute for groups
+test_fn <- function(.df){
+  t_test(.df, 
+         formula = level ~ group,
+         order = c('ASD', 'TD'),
+         alternative = 'two-sided',
+         var.equal = F)
+}
+
+tt_out <- asd_nested %>%
+  mutate(ttest = map(data, test_fn)) %>%
+  unnest(ttest) %>%
+  arrange(p_value)
+
+# multiple testing corrections
+m <- nrow(tt_out)
+hm <- log(m) + 1/(2*m) - digamma(1)
+
+tt_corrected <- tt_out %>%
+  select(data, protein, p_value) %>%
+  mutate(rank = row_number()) %>%
+  mutate(p_bh = p_value*m/rank,
+         p_by = p_value*m*hm/rank,
+         p_bonf = p_value*m)
+
+# top 10 for multiple testing
+s1 <- tt_corrected %>%
+  select(protein, p_by) %>%
+  slice_min(order_by = p_by, n = 10) %>%
+  pull(protein)
+
+print("Top 10 proteins for multiple testing:")
+s1
+
+# random forest
+asd_response <- asd_clean$group
+asd_preds <- asd_clean[, -1] 
+rf_out <- randomForest(x = asd_preds, # predictors
+                       y = as.factor(asd_response), # response
+                       ntree = 100, # number of trees
+                       importance = T) # compute importance
+
+# select most important predictors
+s2 <- rf_out$importance %>% 
+  as_tibble() %>%
+  mutate(protein = rownames(rf_out$importance)) %>%
+  slice_max(MeanDecreaseGini, n = 10) %>%
+  pull(protein)
+
+print("Top 10 proteins for random forest:")
+s2
+
+## correlation method
+corr_data <- train_bio %>% 
+  filter(!is.na(ados))
+
+s3 <- corr_data %>%
+  pivot_longer(cols = -c(ados, group),
+               names_to = 'protein',
+               values_to = 'level') %>%
+  group_by(protein) %>%
+  summarize(correlation = cor(as.numeric(ados), level)) %>%
+  arrange(desc(correlation)) %>%
+  slice_head(n = 10)  # Select top 10 proteins
+
+print("Top 10 proteins for correlation method:")
+s3$protein
+
+
+proteins_sstar <- intersect(s1, s2)
+
+proteins_sstar
+
+biomarker_sstar <- biomarker_clean %>%
+  select(group, any_of(proteins_sstar)) %>%
+  mutate(class = (group == 'ASD')) %>%
+  select(-group)
+
+biomarker_split <- biomarker_sstar %>%
+  initial_split(prop = 0.8)
+
+fit <- glm(class ~ ., 
+           data = training(biomarker_split), 
+           family = 'binomial')
+
+class_metrics <- metric_set(sensitivity, 
+                            specificity, 
+                            accuracy,
+                            roc_auc)
+
+testing(biomarker_split) %>%
+  add_predictions(fit, type = 'response') %>%
+  mutate(est = as.factor(pred > 0.5), tr_c = as.factor(class)) %>%
+  class_metrics(estimate = est,
+                truth = tr_c, pred,
+                event_level = 'second')
+```
+
+By only applying the selection methods to training dataset, there are only three core proteins which are "DERM", "TGF-b R III", "EPHB2". We are able to get a similar sensitivity, specificity, accuracy and roc_auc values which are around 0.7.
+
+```{r}
+
+
+# Choose a larger number (more than ten) of top predictive proteins using each selection method
+# We will try choosing 25 proteins for each method!
+
+#setwd("C:/Users/Keon School/OneDrive/Documents/GitHub/module1-group")
+
+library(tidyverse)
+library(infer)
+library(randomForest)
+library(tidymodels)
+library(modelr)
+library(yardstick)
+load('data/biomarker-clean.RData')
+
+## MULTIPLE TESTING
+####################
+
+# function to compute tests
+test_fn <- function(.df){
+  t_test(.df, 
+         formula = level ~ group,
+         order = c('ASD', 'TD'),
+         alternative = 'two-sided',
+         var.equal = F)
+}
+
+ttests_out <- biomarker_clean %>%
+  # drop ADOS score
+  select(-ados) %>%
+  # arrange in long format
+  pivot_longer(-group, 
+               names_to = 'protein', 
+               values_to = 'level') %>%
+  # nest by protein
+  nest(data = c(level, group)) %>% 
+  # compute t tests
+  mutate(ttest = map(data, test_fn)) %>%
+  unnest(ttest) %>%
+  # sort by p-value
+  arrange(p_value) %>%
+  # multiple testing correction
+  mutate(m = n(),
+         hm = log(m) + 1/(2*m) - digamma(1),
+         rank = row_number(),
+         p.adj = m*hm*p_value/rank)
+
+#ttests_out
+
+# select significant proteins
+proteins_s1 <- ttests_out %>%
+  slice_min(p.adj, n = 25) %>%
+  pull(protein)
+
+#proteins_s1
+
+## RANDOM FOREST
+##################
+
+# store predictors and response separately
+predictors <- biomarker_clean %>%
+  select(-c(group, ados))
+
+response <- biomarker_clean %>% pull(group) %>% factor()
+
+# fit RF
+set.seed(101422) # Set the same seed to reproduce the same analysis
+rf_out <- randomForest(x = predictors, 
+                       y = response, 
+                       ntree = 1000, 
+                       importance = T)
+
+# check errors
+rf_out$confusion
+
+# compute importance scores
+proteins_s2 <- rf_out$importance %>% 
+  as_tibble() %>%
+  mutate(protein = rownames(rf_out$importance)) %>%
+  slice_max(MeanDecreaseGini, n = 25) %>%
+  pull(protein)
+
+#proteins_s2
+
+
+corr_data <- biomarker_clean %>% 
+  filter(!is.na(ados))
+
+corr_data
+
+proteins_s3 <- corr_data %>%
+  pivot_longer(cols = -c(ados, group),
+               names_to = 'protein',
+               values_to = 'level') %>%
+  group_by(protein) %>%
+  summarize(correlation = cor(ados, level)) %>%
+  arrange(desc(abs(correlation))) %>%
+  slice_head(n = 25)  # Select top 25 proteins
+
+## LOGISTIC REGRESSION
+#######################
+
+# select subset of interest
+proteins_sstar <- intersect(proteins_s1, proteins_s2)
+
+proteins_sstar
+
+biomarker_sstar <- biomarker_clean %>%
+  select(group, any_of(proteins_sstar)) %>%
+  mutate(class = (group == 'ASD')) %>%
+  select(-group)
+
+# partition into training and test set
+set.seed(101422) # Set the same seed to reproduce the same analysis
+biomarker_split <- biomarker_sstar %>%
+  initial_split(prop = 0.8)
+
+# fit logistic regression model to training set
+fit <- glm(class ~ ., 
+           data = training(biomarker_split), 
+           family = 'binomial')
+
+# evaluate errors on test set
+class_metrics <- metric_set(sensitivity, 
+                            specificity, 
+                            accuracy,
+                            roc_auc)
+
+testing(biomarker_split) %>%
+  add_predictions(fit, type = 'response') %>%
+  mutate(est = as.factor(pred > 0.5), tr_c = as.factor(class)) %>%
+  class_metrics(estimate = est,
+                truth = tr_c, pred,
+                event_level = 'second')
+
+
+
+# Original intersected proteins: "DERM"  "RELT"  "IgD"   "FSTL1"
+
+# Model metrics on original analysis (on testing set): 
+# Sensitivity = 0.875
+# Specificity = 0.8
+# Accuracy = 0.839
+# Roc_auc = 0.908
+
+
+# New intersected proteins: "DERM", "RELT", "Calcineurin", "IgD", "PTN", 
+# "FSTL1", "MAPK2", "TGF-b R III", "MMP-2", "gp130, soluble", "Notch 1", "ALCAM", "MATN2"
+
+# Model metrics on larger model: 
+# Sensitivity = 0.812
+# Specificity = 0.867
+# Accuracy = 0.839
+# Roc_auc = 0.946
+
+# Accuracy is the same, and ROC_AUC is higher, which suggest that the large model performed better. 
+# Sensitivity decreased while specificity increased, suggesting more false positives and fewer false negatives. 
+
+```
+
+To see whether choosing a larger number of predictive proteins would impact our results, we decided to select the top 25 proteins from random forest and t tests and found the metrics on the resulting model. After intersecting, we got a larger model of 13 proteins: "DERM", "RELT", "Calcineurin", "IgD", "PTN", "FSTL1", "MAPK2", "TGF-b R III", "MMP-2", "gp130, soluble", "Notch 1", "ALCAM", and "MATN2". With this panel, we fitted a logistic regression model, which reported a higher ROC_AUC of 0.946.
+
+```{r}
+# Fuzzy intersection instead of hard intersection
+
+
+rf_importance <- importance(rf_out)
+rf_importance <- as.data.frame(rf_importance)
+
+
+# Normalize random forest importance scores
+rf_importance$norm_importance <- (rf_importance$MeanDecreaseGini - min(rf_importance$MeanDecreaseGini)) / 
+  (max(rf_importance$MeanDecreaseGini) - min(rf_importance$MeanDecreaseGini))
+
+# Convert p-values to a score (1 - p_value), we then compare with normalized rf importance scores.
+ttests_out$p_score <- 1 - ttests_out$p_value
+
+# Merge the two data frames
+merged_results <- merge(rf_importance, ttests_out, by.x = "row.names", by.y = "protein", all = TRUE)
+colnames(merged_results)[1] <- "protein"
+#merged_results
+
+# Calculate fuzzy intersection score
+merged_results$fuzzy_intersection <- pmin(merged_results$norm_importance, merged_results$p_score)
+
+# Sort by fuzzy intersection score
+merged_results <- merged_results[order(-merged_results$fuzzy_intersection), ]
+#merged_results
+
+# Select variables with fuzzy intersection score above 0.5
+fuzzy_proteins <- merged_results[merged_results$fuzzy_intersection > 0.5, "protein"]
+
+fuzzy_proteins # This fuzzy intersection gives us a panel of 5 proteins: "DERM", "IgD", "TGF-b R III", "MAPK14", "FSTL1"
+
+
+biomarker_sstar_2 <- biomarker_clean %>%
+  select(group, any_of(fuzzy_proteins)) %>%
+  mutate(class = (group == 'ASD')) %>%
+  select(-group)
+
+# partition into training and test set
+set.seed(101422) # Set the same seed to reproduce the same analysis
+biomarker_split2 <- biomarker_sstar_2 %>%
+  initial_split(prop = 0.8)
+
+# fit logistic regression model to training set
+fit2 <- glm(class ~ ., 
+           data = training(biomarker_split2), 
+           family = 'binomial')
+
+# evaluate errors on test set
+class_metrics2 <- metric_set(sensitivity, 
+                            specificity, 
+                            accuracy,
+                            roc_auc)
+
+testing(biomarker_split2) %>%
+  add_predictions(fit2, type = 'response') %>%
+  mutate(est = as.factor(pred > 0.5), tr_c = as.factor(class)) %>%
+  class_metrics(estimate = est,
+                truth = tr_c, pred,
+                event_level = 'second')
+
+
+# With this method of fuzzy intersection we found a panel of five proteins. We got metrics of: 
+# sensitivity: 0.75 
+# specificity: 0.8  
+# accuracy: 0.774
+# roc_auc: 0.888
+
+```
+
+To perform a fuzzy intersection to combine top predictive proteins across our selection methods, we normalized random forest importance scores and converted p-values from our t tests so that we could compare the results from the methods. We then found the minimum of these values for each protein and selected a threshold for which variables we would want to include in a new regression analysis. Through this regression we found a ROC_AUC of 0.888, which was lower than the original analysis, indicating that our model performed slightly worse, but comparably.
+
 ### Improved classifier
 
 Task 4
+
+```{r}
+library(glmnet)
+library(tidyverse)
+library(tidymodels)
+library(tibble)
+library(modelr)
+
+
+set.seed(1)
+
+
+biomarker_LASSO = biomarker_clean %>% 
+  select(-ados) %>% 
+  mutate(class = as.numeric(group == 'ASD'))
+partitions <- biomarker_LASSO %>%
+  initial_split(prop = 0.8)
+
+x_train <- training(partitions) %>%
+  select(-group, -class) %>%
+  as.matrix()
+y_train <- training(partitions) %>%
+  pull(class)
+
+lambda_test <- cv.glmnet(x_train, y_train, family = 'binomial', nfolds=5)
+lambda_min <- lambda_test$lambda.1se
+lambda_min = exp(-1.75)
+final_fit <- glmnet(x_train, y_train, family = 'binomial', lambda = lambda_min)
+final_fit_df = tidy(final_fit)
+
+
+proteins_panel = final_fit_df %>%
+  filter(term != "(Intercept)") %>% 
+  pull(term)
+biomarker_panel <- biomarker_clean %>%
+  select(group, any_of(proteins_panel)) %>%
+  mutate(class = (group == 'ASD')) %>%
+  select(-group)
+
+#print(str(biomarker_panel))
+
+biomarker_split <- biomarker_panel %>%
+  initial_split(prop = 0.8)
+
+fit <- glm(class ~ ., 
+           data = training(biomarker_split), 
+           family = 'binomial')
+
+class_metrics <- metric_set(accuracy)
+
+testing(biomarker_split) %>%
+  add_predictions(fit, type = 'response') %>%
+  mutate(est = as.factor(pred > 0.5), tr_c = as.factor(class)) %>%
+  class_metrics(estimate = est,
+                truth = tr_c, pred,
+                event_level = 'second')
+
+
+
+```
+
+First, we split our data into training and testing sets, with 80% of the data being training data. Next, we performed cross validation on the training set to get a panel of proteins. Then, we fit a binomial generalized linear model to this panel of proteins and evaluated our metrics. We reported an accuracy of 0.871 on our panel of proteins.
