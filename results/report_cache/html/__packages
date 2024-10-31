@@ -24,3 +24,4 @@ workflows
 workflowsets
 yardstick
 modelr
+randomForest
